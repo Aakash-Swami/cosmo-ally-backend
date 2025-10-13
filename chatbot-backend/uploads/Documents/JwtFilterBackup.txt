@@ -1,0 +1,70 @@
+package com.chatbot.filter;
+
+import com.chatbot.service.CustomUserDetailsService;
+import com.chatbot.service.JwtUtil;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+public class JwtFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CustomUserDetailsService userDetailsService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+
+        String authHeader = request.getHeader("Authorization");
+        String token = null;
+        String email = null;
+
+        System.out.println("👉 [JWT Filter] Incoming request: " + request.getRequestURI());
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+            System.out.println("🔐 [JWT Filter] Token found: " + token);
+
+            try {
+                email = jwtUtil.extractUsername(token);
+                System.out.println("📧 [JWT Filter] Extracted email: " + email);
+            } catch (Exception e) {
+                System.out.println("❌ [JWT Filter] Error extracting username: " + e.getMessage());
+            }
+        } else {
+            System.out.println("⚠️ [JWT Filter] No token found in Authorization header");
+        }
+
+        if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+
+            if (jwtUtil.validateToken(token, userDetails.getUsername())) {
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                System.out.println("✅ [JWT Filter] User authenticated: " + email);
+            } else {
+                System.out.println("❌ [JWT Filter] Token invalid for user: " + email);
+            }
+        }
+
+        chain.doFilter(request, response);
+    }
+
+
+}

@@ -1,0 +1,9 @@
+FROM openjdk:17-jdk-slim
+
+WORKDIR /app
+
+# Copy pre-built jar
+COPY target/chatbot-backend-0.0.1-SNAPSHOT.jar app.jar
+
+# Run the jar
+CMD ["java", "-jar", "app.jar"]
